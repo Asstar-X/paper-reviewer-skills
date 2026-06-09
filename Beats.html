@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>从特征重建到语义离散化：迭代式声学分词器如何重构音频自监督学习的性能极限</title>
+</head>
+<body style="background-color: #ffffff; margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #374151; line-height: 1.8; letter-spacing: 0.3px;">
+    <div style="max-width: 650px; margin: 0 auto; padding: 20px 10px;">
+        
+        <!-- 文章标题 -->
+        <h1 style="font-size: 1.6em; color: #111827; line-height: 1.4; font-weight: bold; margin-bottom: 24px; text-align: left; letter-spacing: 0.5px;">
+            从特征重建到语义离散化：迭代式声学分词器如何重构音频自监督学习的性能极限
+        </h1>
+        
+        <!-- 论文基本信息 (Metadata) -->
+        <div style="border-left: 3px solid #111827; padding-left: 16px; margin-bottom: 30px; font-size: 14px; color: #4b5563;">
+            <p style="margin: 4px 0; text-indent: 0;"><strong>文章名字：</strong>BEATs: Audio Pre-Training with Acoustic Tokenizers</p>
+            <p style="margin: 4px 0; text-indent: 0;"><strong>作者与机构：</strong>Sanyuan Chen, Yu Wu, Chengyi Wang, Shujie Liu, Daniel Tompkins, Zhuo Chen, Furu Wei (Microsoft)</p>
+            <p style="margin: 4px 0; text-indent: 0;"><strong>期刊与会议：</strong>ICML 2023 (Proceedings of the 40th International Conference on Machine Learning)</p>
+            <p style="margin: 4px 0; text-indent: 0;"><strong>论文类型：</strong>Method / System</p>
+            <p style="margin: 4px 0; text-indent: 0; text-align: justify;"><strong>一句话定位：</strong>首个通过迭代联合优化声学分词器与自监督编码器的音频预训练框架，彻底打破重建损失的语义瓶颈，以极低训练代价刷新 AudioSet-2M 性能极限。</p>
+        </div>
+
+        <!-- 一、 完整摘要 -->
+        <h2 style="font-size: 1.35em; color: #111827; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 6px; margin-top: 36px; margin-bottom: 18px; letter-spacing: 0.5px;">
+            一、 完整摘要
+        </h2>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            通用音频自监督学习（SSL）近年来发展迅速。然而，与语言、视觉、语音等模态广泛采用的离散标签预测目标不同，当前最先进的音频自监督模型（如 Audio-MAE）在预训练时依然采用声学特征重建损失。与重建损失相比，富含语义的离散标签预测能够促使自监督模型抽象出高级音频语义，并丢弃冗余细节，从而与人类的听觉感知相契合。然而，由于音频信号的连续性以及不像语音那样具备天然的音素序列，获取一个适用于通用音频预训练的、富含语义的声学分词器（Acoustic Tokenizer）并非易事。
+        </p>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            为了攻克这一挑战，本研究提出了 <strong>BEATs</strong>——一个用于学习双向音频 Transformer 编码器表示的迭代式音频预训练框架，其中声学分词器和自监督音频模型能够通过迭代循环联合进行优化。在首个迭代周期，使用随机投影作为分词器进行冷启动，以“遮掩-离散标签预测”的方式训练自监督模型。在后续迭代中，通过从上一步预训练或微调过的自监督模型中蒸馏语义知识来训练全新的分词器。该迭代循环循环往复，实现声学分词器与自监督模型性能的互促共进。
+        </p>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            实验结果表明，该声学分词器能生成富含音频语义的离散标签，而自监督音频模型在多个下游音频分类基准任务上达到了最先进的性能（SOTA），甚至显著超越了参数量更大、使用训练数据更多的前代方案。具体而言，BEATs 在仅使用音频数据的情况下，在 AudioSet-2M 上取得了 50.6% mAP 的全新 SOTA 集成模型成绩，并在 ESC-50 任务上达到了 98.1% 的分类准确率。
+        </p>
+
+        <!-- 二、 知识背景全景 -->
+        <h2 style="font-size: 1.35em; color: #111827; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 6px; margin-top: 36px; margin-bottom: 18px; letter-spacing: 0.5px;">
+            二、 知识背景全景
+        </h2>
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            前置概念
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>自监督学习（SSL）：</strong>指无需人工标注数据，通过在海量无标记数据上设计特定预测任务（如遮掩预测、对比学习），使模型自发地提取并表征高阶特征的技术。
+        </p>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>声学分词器（Acoustic Tokenizer）：</strong>一种将连续的时频声学信号映射并量化为离散序列代号（Discrete Tokens）的工具，为掩码语言建模等任务提供可预测的目标。
+        </p>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>掩码音频建模（MAM）：</strong>类似 NLP 中的 BERT 掩码预测任务，通过随机遮掩输入音频时谱图的某些斑块（Patches），驱动编码器预测这些被遮掩斑块所对应的声学分词器离散标签。
+        </p>
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            赛道全景与出现契机
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            在自监督音频预训练的赛道上，现存的主要路线可分为<strong>对比学习流派</strong>（如 COLA、CLAP）和<strong>特征重建流派</strong>（如 SSAST、Audio-MAE）。虽然重建流派在近年取得了主导性的性能优势，但其核心痛点在于重建损失驱使模型过度关注混响、噪声等无关紧要的低级物理细节，限制了其对高阶语义特征的抽象。
+        </p>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            与此同时，离散特征预测已经在自然语言（BERT）、计算机视觉（BEiT）和语音处理（HuBERT）中被证实可以为基础模型赋予极佳的语义抽象与鲁棒特征。但在通用非言语音频中，由于缺乏音素等离散基元结构，设计富含高维语义的声学分词器一直是该赛道的空白。BEATs 的提出，恰恰填补了通用音频领域无法高效进行掩码离散标签学习的缺憾，利用迭代演化机制打破了赛道原有的重建瓶颈。
+        </p>
+
+        <!-- 三、 痛点与动机 -->
+        <h2 style="font-size: 1.35em; color: #111827; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 6px; margin-top: 36px; margin-bottom: 18px; letter-spacing: 0.5px;">
+            三、 痛点与动机
+        </h2>
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            技术瓶颈与隐藏约束
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            通用音频信号包含了极其多样的声学事件（如风声、乐器声、动物吠叫等）。它是一组连续、多源的混合波形。在没有现成文本与音素先验信息的情况下，如何对其进行合理的离散语义划分是一大核心瓶颈。如果只对连续声学特征进行简单的 K-Means 聚类，极易被多变的环境噪声和空间混响所主导，产生与真实声学语义无关的“伪标签”；而直接使用特征重建机制，则会导致大量参数被浪费在捕捉无意义的物理细节上。
+        </p>
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            研究动机
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            本项研究的核心动机是：<strong>如何让声学分词器和自监督编码器形成一种“互促进化”的双赢回路？</strong> 既然没有先天的语义分词器，作者考虑以随机投影作为冷启动，接着用训练好的 SSL 编码器特征对分词器进行蒸馏，从而提升分词器输出标签的语义纯度。随后，纯度更高的离散标记又在下一迭代阶段用于反哺 SSL 的掩码标签预测，最终实现两者的协同收敛。
+        </p>
+
+        <!-- 四、 核心方法 -->
+        <h2 style="font-size: 1.35em; color: #111827; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 6px; margin-top: 36px; margin-bottom: 18px; letter-spacing: 0.5px;">
+            四、 核心方法
+        </h2>
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            创新设计概述
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            BEATs 核心架构围绕<strong>迭代更新回路</strong>设计，其主体数据流向与优化机制如图 1 所示。
+        </p>
+        
+        <!-- 图 1 -->
+        <div style="text-align: center; margin: 24px 0;">
+            <img src="./figure/figure_1.png" alt="Figure 1" style="max-width: 100%; height: auto; display: block; margin: 0 auto 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <p style="text-align: center; text-indent: 0; font-size: 13px; color: #6b7280; margin: 0; padding: 0 10px; line-height: 1.4;">图 1：BEATs 的迭代式音频预训练流程架构</p>
+        </div>
+        
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            在图中，<strong>左侧橙色卡片（Acoustic Tokenizer）</strong>代表当前声学分词器，它接收无标注音频并生成离散的目标标签（如上部金色箭头所示）。<strong>右侧粉色卡片（Audio SSL Model）</strong>接收被大比例掩码的音频分片，并负责在掩码位置预测分词器产生的目标离散标签。当模型收敛后，系统将 SSL 模型转换为教师模型，通过<strong>知识蒸馏方式（下部蓝色箭头）</strong>进一步训练优化分词器，以此往复循环。
+        </p>
+
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            声学分词器细节
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            在每次预训练迭代周期中，声学分词器用于为无标注音频数据提供预训练离散标签。在首次迭代冷启动阶段，通过没有先验教师的随机投影分词器完成（图 2 a）。自第二期迭代开始，则使用基于自监督教师模型蒸馏机制的自蒸馏分词器（图 2 b）。
+        </p>
+
+        <!-- 图 2 -->
+        <div style="text-align: center; margin: 24px 0;">
+            <img src="./figure/figure_2.png" alt="Figure 2" style="max-width: 100%; height: auto; display: block; margin: 0 auto 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <p style="text-align: center; text-indent: 0; font-size: 13px; color: #6b7280; margin: 0; padding: 0 10px; line-height: 1.4;">图 2：声学分词器的两种机制：(a) 随机投影分词器，(b) 自蒸馏分词器</p>
+        </div>
+
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>1. 随机投影分词器（Random-Projection Tokenizer）：</strong>对于首期迭代的音频信号 $X = \{x_t\}_{t=1}^T$，首先通过随机初始化的线性映射层 $W$ 将时谱图分片向量 $x_t$ 投影到 $W x_t$ 维度。然后，从一组随机初始化的冷启动码本（Frozen Codebook）$V = \{v_i\}_{i=1}^K$ 中寻找最近邻向量，其索引被用作首次训练的离散语义标签 $\hat{z}_t$：
+        </p>
+        
+        <!-- 公式 1 -->
+        <p style="text-align: center; margin: 16px 0; font-family: 'Times New Roman', Times, serif; font-size: 1.15em; color: #111827; line-height: 1.8; padding: 4px 0; border: none;"><span style="float: right; color: #6b7280; font-size: 0.85em; font-family: sans-serif; font-weight: normal; margin-top: 2px;">(1)</span><i>&zcirc;</i><sub><i>t</i></sub> = <span style="display: inline-block; vertical-align: middle; text-align: center; margin: 0 4px;"><span style="font-size: 0.8em; display: block; line-height: 1.1;">arg min</span><span style="font-size: 0.7em; display: block; line-height: 1.1;"><i>i</i></span></span> ||<i>v</i><sub><i>i</i></sub> − <i>W</i><i>x</i><sub><i>t</i></sub>||<sup>2</sup><sub>2</sub></p>
+
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>2. 自蒸馏分词器（Self-Distilled Tokenizer）：</strong>在迭代周期中，使用一个 12 层的 Transformer 作为 Tokenizer Encoder，将输入分片 $X = \{x_t\}_{t=1}^T$ 编码成隐层特征 $E = \{e_t\}_{t=1}^T$。特征在进行 L2 归一化后计算与 Learnable Codebook $V = \{v_i\}_{i=1}^K$ 的最近邻：
+        </p>
+
+        <!-- 公式 2 -->
+        <p style="text-align: center; margin: 16px 0; font-family: 'Times New Roman', Times, serif; font-size: 1.15em; color: #111827; line-height: 1.8; padding: 4px 0; border: none;"><span style="float: right; color: #6b7280; font-size: 0.85em; font-family: sans-serif; font-weight: normal; margin-top: 2px;">(2)</span><i>&zcirc;</i><sub><i>t</i></sub> = <span style="display: inline-block; vertical-align: middle; text-align: center; margin: 0 4px;"><span style="font-size: 0.8em; display: block; line-height: 1.1;">arg min</span><span style="font-size: 0.7em; display: block; line-height: 1.1;"><i>i</i></span></span> ||<i>l</i><sub>2</sub>(<i>v</i><sub><i>i</i></sub>) − <i>l</i><sub>2</sub>(<i>e</i><sub><i>t</i></sub>)||<sup>2</sup><sub>2</sub></p>
+
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            为了克服“Argmin”不可导的数学约束，本方法使用<strong>直通梯度估计（STE，如图 2 右侧红色环形箭头所示）</strong>直接在反向传播时复制量化后 $E^q$ 的梯度至量化前 $E$。之后，通过一个 3 层的 Transformer Estimator 将量化向量映射，并去预测教师模型（Last-iteration SSL）输出的目标特征 $\hat{o}_t$。其综合优化目标包含基于余弦相似度的蒸馏损失和防止码本失活的均方误差损失：
+        </p>
+
+        <!-- 公式 3 -->
+        <p style="text-align: center; margin: 16px 0; font-family: 'Times New Roman', Times, serif; font-size: 1.15em; color: #111827; line-height: 1.8; padding: 4px 0; border: none;"><span style="float: right; color: #6b7280; font-size: 0.85em; font-family: sans-serif; font-weight: normal; margin-top: 2px;">(3)</span><span style="display: inline-block; vertical-align: middle; text-align: center; margin: 0 4px;"><span style="font-size: 0.8em; display: block; line-height: 1.1;">max</span><span style="font-size: 0.7em; display: block; line-height: 1.1;"><i>X&isin;D</i></span></span> <span style="display: inline-block; vertical-align: middle; text-align: center; margin: 0 4px;"><span style="font-size: 0.7em; display: block; line-height: 1.0; margin-bottom: -1px;"><i>T</i></span><span style="font-size: 1.3em; display: block; line-height: 1.0; font-family: 'Times New Roman', Times, serif;">&sum;</span><span style="font-size: 0.7em; display: block; line-height: 1.0; margin-top: -1px;"><i>t=1</i></span></span> [ cos(<i>o</i><sub><i>t</i></sub>, <i>&ocirc;</i><sub><i>t</i></sub>) − ||sg[<i>l</i><sub>2</sub>(<i>e</i><sub><i>t</i></sub>)] − <i>l</i><sub>2</sub>(<i>v</i><sub><i>&zcirc;</i><sub><i>t</i></sub></sub>)||<sup>2</sup><sub>2</sub> − ||<i>l</i><sub>2</sub>(<i>e</i><sub><i>t</i></sub>) − sg[<i>l</i><sub>2</sub>(<i>v</i><sub><i>&zcirc;</i><sub><i>t</i></sub></sub>)]||<sup>2</sup><sub>2</sub> ]</p>
+
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            音频自监督模型（MAM）预训练与微调
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            掩码音频建模任务的具体结构如图 3 所示：
+        </p>
+
+        <!-- 图 3 -->
+        <div style="text-align: center; margin: 24px 0;">
+            <img src="./figure/figure_3.png" alt="Figure 3" style="max-width: 100%; height: auto; display: block; margin: 0 auto 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <p style="text-align: center; text-indent: 0; font-size: 13px; color: #6b7280; margin: 0; padding: 0 10px; line-height: 1.4;">图 3：自监督音频编码器预训练 (a) 与下游任务微调 (b) 结构示意</p>
+        </div>
+
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>预训练阶段（图 3 a）：</strong>对输入的音频谱图分片序列进行大比例的<strong>随机掩码（75% 比例）</strong>，仅将非掩码的 25% 斑块序列（Unmasked Patches）通过线性映射输入 Transformer 编码器（ViT-Base）中，以节省大量计算资源并极大加快训练速度。随后通过 Label Predictor 与遮罩占位符进行拼接，对被遮罩位置的离散标签进行交叉熵损失优化：
+        </p>
+
+        <!-- 公式 4 -->
+        <p style="text-align: center; margin: 16px 0; font-family: 'Times New Roman', Times, serif; font-size: 1.15em; color: #111827; line-height: 1.8; padding: 4px 0; border: none;"><span style="float: right; color: #6b7280; font-size: 0.85em; font-family: sans-serif; font-weight: normal; margin-top: 2px;">(4)</span><i>L</i><sub>MAM</sub> = − <span style="display: inline-block; vertical-align: middle; text-align: center; margin: 0 4px;"><span style="font-size: 0.7em; display: block; line-height: 1.0; margin-bottom: -1px;">&nbsp;</span><span style="font-size: 1.3em; display: block; line-height: 1.0; font-family: 'Times New Roman', Times, serif;">&sum;</span><span style="font-size: 0.7em; display: block; line-height: 1.0; margin-top: -1px;"><i>t &isin; M</i></span></span> log <i>p</i>(<i>&zcirc;</i><sub><i>t</i></sub> | <i>X</i><sub>U</sub>)</p>
+
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>下游微调阶段（图 3 b）：</strong>当预训练模型收敛后，移去顶部的 Label Predictor，代之以全局平均池化（MeanPool）及 Task-Specific Linear Classifier。微调阶段模型需要接收完整的未掩码时频谱图序列。
+        </p>
+
+        <!-- 五、 实验 -->
+        <h2 style="font-size: 1.35em; color: #111827; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 6px; margin-top: 36px; margin-bottom: 18px; letter-spacing: 0.5px;">
+            五、 实验
+        </h2>
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            实验配置
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>预训练模型规格：</strong>12层 Transformer 编码器结构，768维隐层向量，8个多头自注意力头。模型总参数量为 90M，与当前主流的自监督模型（如 86M 的 Audio-MAE）对齐。
+        </p>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>预训练数据集与细节：</strong>在 AudioSet-2M 数据集上迭代预训练了三个周期（BEATs_iter1, BEATs_iter2, BEATs_iter3）。为探究有监督数据对语义分词的增益，引入了以微调后的模型作为分词器教师所进行训练的 BEATs_iter3+ 方案。每次预训练在 8 张至 16 张 GPU 下进行，耗费 400K 步。分词器码本容量设为 1024。
+        </p>
+
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            实验结果对比
+        </h3>
+        
+        <!-- 表格 1 -->
+        <p style="font-size: 13px; font-weight: bold; color: #111827; margin: 16px 0 8px 0; text-indent: 0;">
+            表 1：BEATs 与前代 SOTA 单模型在音频与语音分类任务上的性能对比
+        </p>
+        <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 12px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; color: #374151; font-family: sans-serif; text-align: left; border-top: 2px solid #111827; border-bottom: 2px solid #111827; min-width: 600px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">Model</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;"># Param</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">Data</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">AS-2M</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">AS-20K</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">ESC-50</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">KS1</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">KS2</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">ER</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold; background-color: #fafafa;">
+                        <td colspan="9" style="padding: 6px 8px; border: none;">无预训练 (From Scratch)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">PANN [2020]</td>
+                        <td style="padding: 6px 8px; border: none;">81M</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">43.1</td>
+                        <td style="padding: 6px 8px; border: none;">27.8</td>
+                        <td style="padding: 6px 8px; border: none;">83.3</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">61.8</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">ERANN [2022]</td>
+                        <td style="padding: 6px 8px; border: none;">55M</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">45.0</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">89.2</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold; background-color: #fafafa; color: #9ca3af;">
+                        <td colspan="9" style="padding: 6px 8px; border: none;">域外有监督预训练 (ImageNet / Text-Image)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">PSLA [2021b]</td>
+                        <td style="padding: 6px 8px; border: none;">14M</td>
+                        <td style="padding: 6px 8px; border: none;">IN</td>
+                        <td style="padding: 6px 8px; border: none;">44.4</td>
+                        <td style="padding: 6px 8px; border: none;">31.9</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">96.3</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">AST [2021a]</td>
+                        <td style="padding: 6px 8px; border: none;">86M</td>
+                        <td style="padding: 6px 8px; border: none;">IN</td>
+                        <td style="padding: 6px 8px; border: none;">45.9</td>
+                        <td style="padding: 6px 8px; border: none;">34.7</td>
+                        <td style="padding: 6px 8px; border: none;">88.7</td>
+                        <td style="padding: 6px 8px; border: none;">95.5</td>
+                        <td style="padding: 6px 8px; border: none;">98.1</td>
+                        <td style="padding: 6px 8px; border: none;">56.0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">HTS-AT [2022a]</td>
+                        <td style="padding: 6px 8px; border: none;">31M</td>
+                        <td style="padding: 6px 8px; border: none;">IN</td>
+                        <td style="padding: 6px 8px; border: none;">47.1</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">98.0</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">AudioCLIP [2022]</td>
+                        <td style="padding: 6px 8px; border: none;">93M</td>
+                        <td style="padding: 6px 8px; border: none;">TI+AS</td>
+                        <td style="padding: 6px 8px; border: none;">25.9</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">96.7</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold; background-color: #fafafa; color: #9ca3af;">
+                        <td colspan="9" style="padding: 6px 8px; border: none;">域内有监督预训练 (Supervised AudioSet)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">AST [2021a]</td>
+                        <td style="padding: 6px 8px; border: none;">86M</td>
+                        <td style="padding: 6px 8px; border: none;">IN+AS</td>
+                        <td style="padding: 6px 8px; border: none;">45.9</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">95.6</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">97.9</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">PaSST [2021]</td>
+                        <td style="padding: 6px 8px; border: none;">86M</td>
+                        <td style="padding: 6px 8px; border: none;">IN+AS</td>
+                        <td style="padding: 6px 8px; border: none;">47.1</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">96.8</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">CLAP [2022]</td>
+                        <td style="padding: 6px 8px; border: none;">190M</td>
+                        <td style="padding: 6px 8px; border: none;">TA</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">96.7</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">96.8</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold; background-color: #fafafa;">
+                        <td colspan="9" style="padding: 6px 8px; border: none;">自监督预训练 (Self-Supervised Pre-Training)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">SS-AST [2022a]</td>
+                        <td style="padding: 6px 8px; border: none;">89M</td>
+                        <td style="padding: 6px 8px; border: none;">AS+LS</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">31.0</td>
+                        <td style="padding: 6px 8px; border: none;">88.8</td>
+                        <td style="padding: 6px 8px; border: none;">96.0</td>
+                        <td style="padding: 6px 8px; border: none;">98.0</td>
+                        <td style="padding: 6px 8px; border: none;">59.6</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">MaskSpec [2022]</td>
+                        <td style="padding: 6px 8px; border: none;">86M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">47.1</td>
+                        <td style="padding: 6px 8px; border: none;">32.3</td>
+                        <td style="padding: 6px 8px; border: none;">89.6</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">97.7</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">MAE-AST [2022]</td>
+                        <td style="padding: 6px 8px; border: none;">86M</td>
+                        <td style="padding: 6px 8px; border: none;">AS+LS</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">30.6</td>
+                        <td style="padding: 6px 8px; border: none;">90.0</td>
+                        <td style="padding: 6px 8px; border: none;">95.8</td>
+                        <td style="padding: 6px 8px; border: none;">97.9</td>
+                        <td style="padding: 6px 8px; border: none;">59.8</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">Audio-MAE [2022]</td>
+                        <td style="padding: 6px 8px; border: none;">86M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">47.3</td>
+                        <td style="padding: 6px 8px; border: none;">37.1</td>
+                        <td style="padding: 6px 8px; border: none;">94.1</td>
+                        <td style="padding: 6px 8px; border: none;">96.9</td>
+                        <td style="padding: 6px 8px; border: none;">98.3</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">Audio-MAE Large</td>
+                        <td style="padding: 6px 8px; border: none;">304M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">47.4</td>
+                        <td style="padding: 6px 8px; border: none;">37.6</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                    </tr>
+                    
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold; background-color: #fafafa;">
+                        <td colspan="9" style="padding: 6px 8px; border: none;">本研究工作 (Ours - BEATs)</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter1</td>
+                        <td style="padding: 6px 8px; border: none;">90M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">47.9</td>
+                        <td style="padding: 6px 8px; border: none;">36.0</td>
+                        <td style="padding: 6px 8px; border: none;">94.0</td>
+                        <td style="padding: 6px 8px; border: none;">98.0</td>
+                        <td style="padding: 6px 8px; border: none;">98.3</td>
+                        <td style="padding: 6px 8px; border: none;">65.9</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter2</td>
+                        <td style="padding: 6px 8px; border: none;">90M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">48.1</td>
+                        <td style="padding: 6px 8px; border: none;">38.3</td>
+                        <td style="padding: 6px 8px; border: none;">95.1</td>
+                        <td style="padding: 6px 8px; border: none;">97.7</td>
+                        <td style="padding: 6px 8px; border: none;">98.3</td>
+                        <td style="padding: 6px 8px; border: none;">66.1</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter3</td>
+                        <td style="padding: 6px 8px; border: none;">90M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">48.0</td>
+                        <td style="padding: 6px 8px; border: none;">38.3</td>
+                        <td style="padding: 6px 8px; border: none;">95.6</td>
+                        <td style="padding: 6px 8px; border: none;">97.7</td>
+                        <td style="padding: 6px 8px; border: none;">98.3</td>
+                        <td style="padding: 6px 8px; border: none;">64.5</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold; color: #111827;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter3+</td>
+                        <td style="padding: 6px 8px; border: none;">90M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">48.6</td>
+                        <td style="padding: 6px 8px; border: none;">38.9</td>
+                        <td style="padding: 6px 8px; border: none;">98.1</td>
+                        <td style="padding: 6px 8px; border: none;">98.1</td>
+                        <td style="padding: 6px 8px; border: none;">98.1</td>
+                        <td style="padding: 6px 8px; border: none;">65.0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <blockquote style="margin: 0 0 24px 0; border-left: 3px solid #111827; padding-left: 16px; color: #4b5563; text-align: justify; font-size: 13px; line-height: 1.6;">
+            <strong>数据解读与定量分析：</strong>在表 1 的单模型性能评估中，首期迭代模型 BEATS_iter1（仅使用随机投影分词器作为冷启动）即在 AudioSet-2M 上取得了 47.9% mAP，超过了之前最强的掩码重建 SOTA 编码器 Audio-MAE（47.3% mAP）以及在 ImageNet 进行了大量有监督预训练的 AST，这强力证实了离散化标签预测相较于传统波形/特征重构机制在提取全局语义特征上的显著效率。在经历三个迭代周期及融入教师微调后，BEATS_iter3+ 以 90M 的参数体量击败了 304M 的 Audio-MAE Large，并在 ESC-50 数据集上将分类错误率从 5.9% 相对压缩 25% 至 1.9%。这说明迭代式自蒸馏分词器能够极其有效排除不相干的时频结构噪声。
+        </blockquote>
+
+        <!-- 表格 2 -->
+        <p style="font-size: 13px; font-weight: bold; color: #111827; margin: 16px 0 8px 0; text-indent: 0;">
+            表 2：不同分词器选择（分词器教师类型）对自监督编码器最终性能的影响
+        </p>
+        <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 12px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; color: #374151; font-family: sans-serif; text-align: left; border-top: 2px solid #111827; border-bottom: 2px solid #111827; min-width: 600px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">Model</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">Tokenizer Type</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">Tokenizer Teacher</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">SSL Data</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">SL Data</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">AS-2M</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">AS-20K</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">ESC-50</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter1</td>
+                        <td style="padding: 6px 8px; border: none;">Random-Projection</td>
+                        <td style="padding: 6px 8px; border: none;">N/A</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">47.9</td>
+                        <td style="padding: 6px 8px; border: none;">36.0</td>
+                        <td style="padding: 6px 8px; border: none;">94.0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter2</td>
+                        <td style="padding: 6px 8px; border: none;">Self-Distilled</td>
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter1</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">48.1</td>
+                        <td style="padding: 6px 8px; border: none;">38.3</td>
+                        <td style="padding: 6px 8px; border: none;">95.1</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter3</td>
+                        <td style="padding: 6px 8px; border: none;">Self-Distilled</td>
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter2</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">-</td>
+                        <td style="padding: 6px 8px; border: none;">48.0</td>
+                        <td style="padding: 6px 8px; border: none;">38.3</td>
+                        <td style="padding: 6px 8px; border: none;">95.6</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter3+</td>
+                        <td style="padding: 6px 8px; border: none;">Self-Distilled</td>
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter2 fine-tuned on AS-20K</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">AS-20K*</td>
+                        <td style="padding: 6px 8px; border: none;">48.0</td>
+                        <td style="padding: 6px 8px; border: none;">38.9</td>
+                        <td style="padding: 6px 8px; border: none;">96.2</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold;">
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter3+</td>
+                        <td style="padding: 6px 8px; border: none;">Self-Distilled</td>
+                        <td style="padding: 6px 8px; border: none;">BEATS_iter2 fine-tuned on AS-2M</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">48.6</td>
+                        <td style="padding: 6px 8px; border: none;">41.8*</td>
+                        <td style="padding: 6px 8px; border: none;">97.1&dagger;</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <blockquote style="margin: 0 0 24px 0; border-left: 3px solid #111827; padding-left: 16px; color: #4b5563; text-align: justify; font-size: 13px; line-height: 1.6;">
+            <strong>数据解读与局限性评估：</strong>分析表 2 的结果可见，使用经过自监督训练教师指导的自蒸馏分词器，在各类任务中性能皆明显优于冷启动的随机投影分词器（如 AS-20K 上从 36.0% 提升至 38.3%）。这一结论在低资源少样本的下游任务中表现尤为明显。然而，消融实验亦揭示出，如果单纯在无监督教师上重复自蒸馏（如使用预训练 BEATS_iter2 训练 iter3 分词器），模型的最终指标会出现平台期或微弱衰退（AS-2M 上从 48.1% 回落至 48.0%）。这表明单纯依靠无监督知识自我蒸馏存在“语义泛化盲区”，必须通过在分词器训练中融入有监督下游梯度（如 BEATS_iter3+ 方案引入微调教师），才能进一步拉高模型特征编码的上限。
+        </blockquote>
+
+        <!-- 表格 3 -->
+        <p style="font-size: 13px; font-weight: bold; color: #111827; margin: 16px 0 8px 0; text-indent: 0;">
+            表 3：BEATs 多模型集成与行业主流 SOTA 集成方案在 AudioSet-2M 上的性能对比
+        </p>
+        <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 12px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; color: #374151; font-family: sans-serif; text-align: left; border-top: 2px solid #111827; border-bottom: 2px solid #111827; min-width: 400px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">Model</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">SL Data</th>
+                        <th style="padding: 10px 8px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; border: none; border-bottom: 1px solid #111827;">AS-2M (mAP)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">PSLA (Ensemble) [2021b]</td>
+                        <td style="padding: 6px 8px; border: none;">IN+AS</td>
+                        <td style="padding: 6px 8px; border: none;">47.4</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">AST (Ensemble) [2021a]</td>
+                        <td style="padding: 6px 8px; border: none;">IN+AS</td>
+                        <td style="padding: 6px 8px; border: none;">48.5</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">HTS-AT (Ensemble) [2022a]</td>
+                        <td style="padding: 6px 8px; border: none;">IN+AS</td>
+                        <td style="padding: 6px 8px; border: none;">48.7</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; color: #9ca3af;">
+                        <td style="padding: 6px 8px; border: none;">PaSST (Ensemble) [2021]</td>
+                        <td style="padding: 6px 8px; border: none;">IN+AS</td>
+                        <td style="padding: 6px 8px; border: none;">49.6</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px; border: none;">BEATS (5 models)</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">50.4</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6; font-weight: bold;">
+                        <td style="padding: 6px 8px; border: none;">BEATS (10 models)</td>
+                        <td style="padding: 6px 8px; border: none;">AS</td>
+                        <td style="padding: 6px 8px; border: none;">50.6</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <blockquote style="margin: 0 0 24px 0; border-left: 3px solid #111827; padding-left: 16px; color: #4b5563; text-align: justify; font-size: 13px; line-height: 1.6;">
+            <strong>数据解读与工程考量：</strong>在集成模型层面（表 3），BEATs 相比于在此前占据主导地位的视觉-音频多源集成方案 PaSST（49.6% mAP）实现了大幅跨越，BEATS (10 models) 最终取得了 50.6% mAP 的绝对佳绩。然而，在真实业务系统落地中，10 模型融合预训练与微调需要消耗成倍的算力与显存空间，推理开销增加。因此，在受限低延迟部署场景下，依旧推荐优先采用在表 1 中表现优异的 BEATS_iter3+ 单模型（48.6% mAP），其在速度和存储占用上具备更高的工程实用价值。
+        </blockquote>
+
+        <!-- 目标可视化分析 -->
+        <h3 style="font-size: 1.1em; color: #111827; font-weight: bold; margin-top: 24px; margin-bottom: 12px;">
+            不同预训练目标鲁棒性可视化分析
+        </h3>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            为了从定量和定性的角度印证“离散语义预测”优于“特征重建”的假说，作者提取了来自 ESC-50 验证集的不同声学事件（狗吠、鸡鸣等共 10 个类别），在波形上叠加上各种环境噪扰（DNS噪声、混响），并对各模型产生的预训练特征输出使用 t-SNE 降维至 2-D 平面进行投射（如图 4 所示）。
+        </p>
+
+        <!-- 图 4 -->
+        <div style="text-align: center; margin: 24px 0;">
+            <img src="./figure/figure_4.png" alt="Figure 4" style="max-width: 100%; height: auto; display: block; margin: 0 auto 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <p style="text-align: center; text-indent: 0; font-size: 13px; color: #6b7280; margin: 0; padding: 0 10px; line-height: 1.4;">图 4：不同模型预训练目标对音频添加噪声混响扰动后的 t-SNE 聚类可视化</p>
+        </div>
+
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            <strong>聚类结果评估：</strong>在图 4 (a) 重建模型中，相同声学事件在引入不同波形干扰后，其特征向量在降维图上散落极开，而不同类别音频（如 dog 与 sheep）反倒因背景噪声相似而被紧密团聚在了一起。这清晰地论证了重建模型为了将波形还原，保留了过多的时频冗余与背景特征。
+        </p>
+        <p style="text-align: justify; text-indent: 2em; margin: 0 0 16px 0;">
+            相反，在图 4 (b) 自监督蒸馏分词器和 (c) 微调教师引导分词器量化空间中，相同类别的音频斑块能够强力收敛为一个又一个紧密且边界明晰的“语义簇”，这说明自蒸馏声学分词器在预训练时不仅具备噪声和混响的不变性，更成功抛弃了声学重建所需的低级繁缛细节，实现了与人脑听觉类似的“语义范畴化（Categorical Perception）”。
+        </p>
+
+        <!-- 表格 4 -->
+        <p style="font-size: 13px; font-weight: bold; color: #111827; margin: 24px 0 8px 0; text-indent: 0;">
+            表 4：BEATs 预训练各个阶段以及各下游微调任务的详细超参数配置表
+        </p>
+        <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 12px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px; color: #374151; font-family: sans-serif; text-align: left; border-top: 2px solid #111827; border-bottom: 2px solid #111827; min-width: 800px;">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="padding: 8px 6px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; vertical-align: middle; border: none; border-bottom: 1px solid #111827;">Hyperparameters</th>
+                        <th colspan="2" style="padding: 8px 6px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">Tokenizer Training</th>
+                        <th rowspan="2" style="padding: 8px 6px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; vertical-align: middle; text-align: center; border: none; border-bottom: 1px solid #111827;">Model Pre-Training</th>
+                        <th colspan="6" style="padding: 8px 6px; font-weight: bold; border-bottom: 1px solid #111827; color: #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">Model Fine-Tuning</th>
+                    </tr>
+                    <tr>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">SSL Teacher</th>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">SL Teacher</th>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">AS-2M</th>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">AS-20K</th>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">ESC</th>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">KS1</th>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">KS2</th>
+                        <th style="padding: 6px; font-weight: bold; border-bottom: 1px solid #111827; text-align: center; border: none; border-bottom: 1px solid #111827;">ER</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Optimizer</td>
+                        <td colspan="9" style="padding: 6px; text-align: center; border: none;">AdamW [Loshchilov and Hutter, 2017]</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Optimizer Momentum</td>
+                        <td colspan="9" style="padding: 6px; text-align: center; border: none;">&beta;<sub>1</sub> = 0.9, &beta;<sub>2</sub> = 0.98</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Weight decay</td>
+                        <td colspan="9" style="padding: 6px; text-align: center; border: none;">0.01</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Learning Rate Schedule</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">Linear Decay</td>
+                        <td colspan="7" style="padding: 6px; text-align: center; border: none;">Cosine</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Steps</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">400K</td>
+                        <td style="padding: 6px; text-align: center; border: none;">50K</td>
+                        <td colspan="6" style="padding: 6px; text-align: center; border: none;">80K</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Warmup epochs</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">32K</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5K</td>
+                        <td colspan="6" style="padding: 6px; text-align: center; border: none;">8K</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">GPU</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">8</td>
+                        <td style="padding: 6px; text-align: center; border: none;">16</td>
+                        <td style="padding: 6px; text-align: center; border: none;">16</td>
+                        <td colspan="5" style="padding: 6px; text-align: center; border: none;">4</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Batch size (s)</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">1.4K</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5.6K</td>
+                        <td style="padding: 6px; text-align: center; border: none;">6.4K</td>
+                        <td style="padding: 6px; text-align: center; border: none;">800</td>
+                        <td style="padding: 6px; text-align: center; border: none;">300</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">100</td>
+                        <td style="padding: 6px; text-align: center; border: none;">300</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Layer-wise LR decay</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">1.0</td>
+                        <td style="padding: 6px; text-align: center; border: none;">1.0</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.6</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.3</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.2</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">0.3</td>
+                        <td style="padding: 6px; text-align: center; border: none;">1.0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Peak learning rate</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5e-5</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5e-4</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5e-4</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5e-4</td>
+                        <td style="padding: 6px; text-align: center; border: none;">1e-4</td>
+                        <td style="padding: 6px; text-align: center; border: none;">3e-5</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">1e-4</td>
+                        <td style="padding: 6px; text-align: center; border: none;">3e-5</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Weighted Sampling</td>
+                        <td colspan="6" style="padding: 6px; border: none;">-</td>
+                        <td style="padding: 6px; text-align: center; border: none;">*</td>
+                        <td colspan="2" style="padding: 6px; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Dropout</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">0.1</td>
+                        <td colspan="7" style="padding: 6px; text-align: center; border: none;">0.0</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Layer Dropout</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">0.0</td>
+                        <td colspan="7" style="padding: 6px; text-align: center; border: none;">0.1</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">SpecAug</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">N/A</td>
+                        <td style="padding: 6px; text-align: center; border: none;">-</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.3</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.2</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.3</td>
+                        <td colspan="3" style="padding: 6px; text-align: center; border: none;">0.15</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Mixup</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">N/A</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.0</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.8</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.0</td>
+                        <td style="padding: 6px; text-align: center; border: none;">0.8</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">0.0</td>
+                        <td style="padding: 6px; text-align: center; border: none;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Loss Function</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">CosineSimilarity</td>
+                        <td style="padding: 6px; text-align: center; border: none;">CE</td>
+                        <td style="padding: 6px; text-align: center; border: none;">BCE</td>
+                        <td style="padding: 6px; text-align: center; border: none;">BCE</td>
+                        <td style="padding: 6px; text-align: center; border: none;">CE</td>
+                        <td colspan="2" style="padding: 6px; text-align: center; border: none;">BCE</td>
+                        <td style="padding: 6px; text-align: center; border: none;">CE</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Dataset Mean</td>
+                        <td colspan="3" style="padding: 6px; text-align: center; border: none;">15.41663</td>
+                        <td style="padding: 6px; text-align: center; border: none;">15.41663</td>
+                        <td style="padding: 6px; text-align: center; border: none;">15.41663</td>
+                        <td style="padding: 6px; text-align: center; border: none;">11.72215</td>
+                        <td style="padding: 6px; text-align: center; border: none;">11.43905</td>
+                        <td style="padding: 6px; text-align: center; border: none;">11.41045</td>
+                        <td style="padding: 6px; text-align: center; border: none;">12.08890</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px; border: none;">Dataset Std</td>
+                        <td colspan="3" style="padding: 6px; text-align: center; border: none;">6.55582</td>
+                        <td style="padding: 6px; text-align: center; border: none;">6.55582</td>
+                        <td style="padding: 6px; text-align: center; border: none;">6.55582</td>
+                        <td style="padding: 6px; text-align: center; border: none;">10.60431</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5.64913</td>
+                        <td style="padding: 6px; text-align: center; border: none;">5.67857</td>
+                        <td style="padding: 6px; text-align: center; border: none;">4.29147</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <blockquote style="margin: 0 0 36px 0; border-left: 3px solid #111827; padding-left: 16px; color: #4b5563; text-align: justify; font-size: 13px; line-height: 1.6;">
+            <strong>注*：</strong>在针对 Speech Commands V1 (KS1) 数据集进行微调时，每个训练 epoch 中会将各个类别平衡抽样至未知（unknown）类别容量的 50%，以消除长尾分布影响。
+        </blockquote>
+
+        <!-- 六、 极客评分 -->
+        <h2 style="font-size: 1.35em; color: #111827; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 6px; margin-top: 36px; margin-bottom: 18px; letter-spacing: 0.5px;">
+            六、 极客评分
+        </h2>
+        <div style="margin-bottom: 16px;">
+            <p style="margin: 4px 0; text-indent: 0;"><strong>创新性评分 (9.0 / 10)：</strong></p>
+            <p style="margin: 4px 0; text-indent: 2em; text-align: justify; color: #4b5563;">
+                彻底颠覆了音频 SSL 领域长久以来的掩码重建架构。将 NLP 与语音中的掩码离散标记预测（MAM）带入通用音频预训练，并精妙设计了能够轮流精炼、互促演进的迭代式自蒸馏声学分词器，理论架构具有强烈的开拓性。
+            </p>
+        </div>
+        <div style="margin-bottom: 16px;">
+            <p style="margin: 4px 0; text-indent: 0;"><strong>实用性评分 (8.5 / 10)：</strong></p>
+            <p style="margin: 4px 0; text-indent: 2em; text-align: justify; color: #4b5563;">
+                预训练通过 75% 的超高掩码率实现了极高加速，且在推理微调时，ViT-Base 的 90M 参数体量对于服务器端和高配边缘端都极易部署。然而，在训练上，其需要声学分词器与自监督音频模型反复交替迭代（多次 400K 步的流程），前期开发调优的训练管线相对传统单阶段模型较为复杂。
+            </p>
+        </div>
+        <div style="margin-bottom: 16px;">
+            <p style="margin: 4px 0; text-indent: 0;"><strong>行业价值评分 (9.0 / 10)：</strong></p>
+            <p style="margin: 4px 0; text-indent: 2em; text-align: justify; color: #4b5563;">
+                开创了统一语言、视觉、语音和通用非言语音频预训练格式的先河，为打造全模态大一统离散底座提供了基石级别的技术方案。同时，该自蒸馏声学分词器在业界已经成为构建新一代多模态大模型（如跨模态音频理解大模型）进行底层声学信号离散化表征的核心参考组件之一。
+            </p>
+        </div>
+
+    </div>
+</body>
+</html>
