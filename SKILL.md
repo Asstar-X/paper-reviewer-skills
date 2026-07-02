@@ -95,7 +95,7 @@
   - **段落正规排版**：段落使用两端对齐（`text-align: justify;`），且首行使用字符缩进（`text-indent: 2em;`），符合专业纸媒学术排版惯例。
   - **极简侧边框引用栏**：段落引用或重要摘要块，转为左侧带粗黑色实线（如 `border-left: 3px solid #111827; padding-left: 16px; color: #4b5563; text-align: justify;`）的无背景卡片，严禁出现彩色背景和圆角。
   - **零 Emoji 纪律**：全篇标题、元信息、列表和表格内部严禁包含任何 Emoji 图标，以树立严肃学术机构的公信力。
-* **自适应图片布局**：HTML 中的图片标签 `<img>` 使用 `./figure_x.png` 相对路径，并配合居中及圆角阴影等效果，方便在微信编辑器中一键替换。
+* **自适应图片布局与 Base64 嵌入（防链接失效）**：HTML 中的图片标签 `<img>` 的 `src` 属性必须直接嵌入经过 Base64 编码的 Data URI 字符流（如 `src="data:image/png;base64,..."`），以确保用户在浏览器中“全选并复制”页面内容并直接粘贴到微信公众号后台或其他富文本编辑器时，图片能够连同文本一并完整无损地复制和上传。
 * **表格移动端及防框线优化**：所有表格必须使用 `overflow-x: auto;` 容器包裹，当列数过多时支持左右滑动。为了防止微信编辑器在解析表格时强制渲染灰色网格线（破坏学术三线表），必须为表格中的每一个 `<td>` 和 `<th>` 单元格显式添加 `border: none; border-left: none; border-right: none; border-top: none; border-bottom: none;` 等行内否定属性（学术三线表特定的顶底边及表头横向细分线除外），重写微信对表格单元格的默认框线渲染规则。
 * **公式公众号无损原生排版**：严禁展示 `$`, `$$` 符号或 `\frac`, `\sum`, `\sigma` 等 LaTeX 源码。所有公式必须转化为原生的 HTML 结构，确保复制粘贴到公众号时无损显示：
   - **无框线块级公式容器**：严禁使用 `<table>` 包装公式和公式编号。公式必须使用独立的 `<p>` 标签（如 `<p style="text-align: center; margin: 16px 0; font-family: 'Times New Roman', Times, serif; font-size: 1.15em; color: #111827; line-height: 1.8; padding: 4px 0; border: none;">`）。公式编号（如 `(1)`）必须使用 `<span style="float: right; color: #6b7280; font-size: 0.85em; font-family: sans-serif; font-weight: normal; margin-top: 2px;">(1)</span>` 包装，并置于 `<p>` 标签的开头，从而完美实现公式居中且编号右对齐的无框线原生排版。
