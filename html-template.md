@@ -20,12 +20,13 @@
   ```html
   <h1 style="font-size: 1.6em; color: #111827; line-height: 1.4; font-weight: bold; margin-bottom: 24px; text-align: left; letter-spacing: 0.5px;">...</h1>
   ```
-- **论文基本信息卡片 (左侧粗黑实线，无背景、无圆角):**
+- **论文基本信息卡片 (微信兼容 `<section>` 容器，左侧粗黑实线，无背景、无圆角):**
   ```html
-  <div style="border-left: 3px solid #111827; padding-left: 16px; margin-bottom: 30px; font-size: 14px; color: #4b5563;">
-      <p style="margin: 4px 0; text-indent: 0;"><strong>文章名字：</strong>...</p>
-  </div>
+  <section style="border-left: 3px solid #111827; padding-left: 14px; margin-top: 16px; margin-bottom: 28px; font-size: 14px; color: #4b5563; box-sizing: border-box;">
+      <p style="margin: 6px 0; text-indent: 0; line-height: 1.75;"><strong>文章名字：</strong>...</p>
+  </section>
   ```
+  > **注意:** 严禁将卡片外层包裹为普通的 `<div>`。微信公众号富文本编辑器对 `<div>` 标签有强制解包（unwrap）清洗规则，会导致外层 `border-left` 直接丢失；必须使用微信原生白名单支持的 `<section>` 标签并附带 `box-sizing: border-box;`。
 - **二级标题 (`<h2>`，底部分割线):**
   ```html
   <h2 style="font-size: 1.35em; color: #111827; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 6px; margin-top: 36px; margin-bottom: 18px; letter-spacing: 0.5px;">...</h2>
