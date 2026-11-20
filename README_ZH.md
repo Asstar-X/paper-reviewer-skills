@@ -54,13 +54,19 @@
 - **轻量环境**（Shell + Python，无 PyMuPDF）：跳过物理裁图，自动补充 ASCII/结构化图注，正常导出公式与学术 HTML；
 - **受限沙箱环境**（纯只读/无脚本权限）：优雅降级为高质量 GFM Markdown，零报错平稳交付。
 
+### 6. 🌐 扩展附属功能：开源项目深度阅读 (Project Reader)
+内置位于 `project-reader/` 的开源项目解读子技能。当用户提供 GitHub 仓库、开源工具官网或技术产品链接时，自动分流至该模块：
+- **卡兹克风格第一人称叙事**：懂行务实、通俗大白话比喻，兼顾小白易懂与行业者深度；
+- **证据第一，绝不臆造指令**：严格基于真实文档提取运行方法，无命令时提供真实主页链接兜底；
+- **微信极简纸媒排版**：直接生成全内联 CSS 的 `[项目名].html`，可一键复制至微信公众号后台。
+
 ---
 
 ## 📂 项目文件架构
 
 ```text
 paper-reviewer-skills/
-├── SKILL.md                 # 核心 Agent Skill 规范（包含标准 YAML Frontmatter）
+├── SKILL.md                 # 核心 Agent Skill 规范（内置自动模式路由）
 ├── figure-extraction.md     # 自适应多栏检测与图内图例保护插图提取规范
 ├── html-template.md         # 微信自媒体纸媒排版规范与混合公式引擎
 ├── README.md                # 英文使用指南
@@ -68,7 +74,14 @@ paper-reviewer-skills/
 ├── SHOWCASE.md              # 完整样例精读报告（BEATs - ICML 2023）
 ├── Beats.html               # 最终微信自媒体高保真 HTML 成果文件
 ├── figure/                  # 提取的高清图表 (figure_1.png ~ figure_4.png)
-└── BEATS - ... .pdf         # 样例学术文献 PDF
+├── BEATS - ... .pdf         # 样例学术文献 PDF
+└── project-reader/          # ✨ 附属技能模块：开源项目深度阅读与公众号转译
+    ├── SKILL.md             # project-reader 技能规范
+    ├── README_zh.md         # 中文详细说明
+    ├── README.md            # 英文详细说明
+    ├── SHOWCASE.md          # 真实推文标杆展示（voice-isolator）
+    ├── demo-article.html    # 微信公众号高颜值富文本 HTML 实物
+    └── templates/           # 微信内联排版与样式指南
 ```
 
 ---
@@ -77,9 +90,9 @@ paper-reviewer-skills/
 
 将本项目目录添加至智能体技能目录（如 `~/.gemini/antigravity/skills/` 或 `.claude/skills/`）：
 
-- **触发标准拆解**：*“精读这篇论文并做标准拆解”* -> 输出完整 7-Point 结构化报告。
-- **触发博客生成**：*“将这篇论文转换为适合发布在公众号/知乎的学术推文”* -> 自动裁剪插图、处理公式并生成 HTML。
-- **触发极速摘要**：*“快速概览这篇文献的核心创新与评分”* -> 输出元信息、摘要与极客评分。
+- **触发论文精读（主干）**：*“精读这篇论文并做标准拆解”* 或提供 PDF/arXiv 链接 -> 严格输出 7-Point 结构化学术报告。
+- **触发学术博客生成**：*“将这篇论文转换为适合发布在公众号/知乎的学术推文”* -> 自动裁剪插图、处理公式并生成 HTML。
+- **触发开源项目深度阅读（附属）**：*“帮我介绍一下这个项目/读一下这个网页：https://github.com/... ”* -> 自动分流至 `project-reader`，以第一人称大白话生成微信高颜值 HTML。
 
 ---
 
