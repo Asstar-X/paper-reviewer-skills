@@ -40,19 +40,22 @@ Provide any project link (GitHub repository, product documentation, AI demo page
 4. **Context & Under-the-Hood**: Historical pain points + author's architectural breakthrough + plain-English background tags (`【补充背景】`).
 5. **How to Try It (Evidence-Grounded)**: Verified quickstart commands or official links/demo fallback.
 6. **Reality Check & Cold Water**: Brutally honest assessment of trade-offs, limitations, and edge-case pitfalls.
-7. **Warm & Grounded Closing**: Objective verdict and audience recommendation.
+7. **Warm & Grounded Closing**: Objective verdict and audience recommendation (flowing naturally without a "最后聊两句" subheading).
+8. **Auto Media Extraction (When Present)**: Automatically crawls real demo audio/video files (`.wav`, `.mp3`, `.mp4`, etc.) into `./media/`, renders Base64 waveform/poster preview cards that paste cleanly into WeChat, and preserves local files for native WeChat upload.
 
 ---
 
 ## 📂 File Structure
 
-```
-c:\Users\letv\Desktop\MTB\skills\paper\project-reader\
+```text
+c:\Users\letv\Desktop\MTB\skills\paper\paper-reviewer-skills\project-reader\
 ├── SKILL.md                          # Core Agent skill definition & execution prompt
 ├── README.md                         # English documentation (this file)
 ├── README_zh.md                      # Chinese documentation
 ├── SHOWCASE.md                       # Full production article showcase
 ├── demo-article.html                 # Pre-compiled high-aesthetic WeChat HTML demo
+├── scripts\
+│   └── extract_media.py              # Audio/video demo crawler, waveform renderer & Base64 injector
 └── templates\
     └── wechat-style-guide.md         # WeChat inline CSS & mobile typography specification
 ```

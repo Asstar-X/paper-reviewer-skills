@@ -85,67 +85,61 @@ license: MIT
 
 ---
 
-### 6. 【泼冷水：没明说的局限与暗礁】
+### 6. 【泼点冷水】
 
-帮读者保持客观清醒，树立博主不说假话的专业口碑：
-- **付出的代价:** 这个办法虽然好，但牺牲了什么？（如：只去噪不修复、算力开销大、对环境有强依赖）。
-- **适用条件与坑:** 什么情况下它根本不管用？普通用户或同行部署时容易踩什么坑？
+- **标题渲染硬性规范：** 在最终生成的正文与 HTML 中，本节的 `<h2>` 标题**固定且仅展示为 `泼点冷水`**，严禁在后面拼接“：没明说的局限与暗礁”或其他副标题/修饰语（如“爽归爽，我也必须……”等）。
+- 帮读者保持客观清醒，树立博主不说假话的专业口碑：
+  - **付出的代价:** 这个办法虽然好，但牺牲了什么？（如：只去噪不修复、算力开销大、对环境有强依赖）。
+  - **适用条件与坑:** 什么情况下它根本不管用？普通用户或同行部署时容易踩什么坑？
 
 ---
 
 ### 7. 【结尾有温度的收束】
 
-- 用 1~2 句话给出客观评价与适用人群建议（哪些朋友建议立刻去玩，哪些情况别抱太大期望）。
+- **标题渲染硬性规范：** 本节**不要输出 `最后聊两句` 或任何类似小标题（`<h2>`）**，直接用 1~2 段自然收尾正文衔接，随后接底部分隔致谢栏。
+- 正文用 1~2 句话给出客观评价与适用人群建议（哪些朋友建议立刻去玩，哪些情况别抱太大期望）。
 - 附带一句简洁真诚的致谢与点赞在看号召。
 
 ---
 
-## §3 HTML 简约排版设计规范 (WeChat Inline CSS)
+## §3 HTML 简约排版设计规范 (Apple Minimalist Inline CSS)
 
-生成的 `.html` 文件必须严格遵守以下排版美学，确保可以直接无缝粘贴进微信公众平台：
+生成的 `.html` 文件必须严格遵守 [`./templates/wechat-style-guide.md`](./templates/wechat-style-guide.md) 中的 **Apple 极简纯黑白灰排版美学**：只用 `#ffffff` 白底、`#f5f5f7` 浅灰卡片、`#1d1d1f` 深墨黑正文与 `#e5e5ea` 1px 细线分割；**严禁彩色竖标、严禁黄色警示卡片、严禁红黄绿代码块装饰点、严禁堆砌 Emoji**，确保可以直接无缝粘贴进微信公众平台：
 
 ```html
-<!-- 核心内联样式速查模板 -->
-<body style="background-color: #ffffff; margin: 0; padding: 20px 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; font-size: 16px; color: #2d3748; line-height: 1.85; letter-spacing: 0.3px;">
+<!-- Apple 极简内联样式速查模板 -->
+<body style="background-color: #ffffff; margin: 0; padding: 20px 14px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; font-size: 16px; color: #1d1d1f; line-height: 1.85; letter-spacing: 0.2px;">
 
   <div style="max-width: 660px; margin: 0 auto; padding: 10px 4px;">
 
-    <!-- 1. 顶部发文配置虚线框 -->
-    <section style="border: 1px dashed #cbd5e1; background-color: #f8fafc; border-radius: 8px; padding: 16px; margin-bottom: 28px; font-size: 13.5px; color: #475569; line-height: 1.7; box-sizing: border-box;">
+    <!-- 1. 顶部发文配置框 -->
+    <section style="border: 1px solid #e5e5ea; background-color: #f5f5f7; border-radius: 12px; padding: 16px 20px; margin-bottom: 32px; font-size: 13.5px; color: #424245; line-height: 1.75; box-sizing: border-box;">
       ...
     </section>
 
-    <!-- 2. 文章大标题 -->
-    <h1 style="font-size: 22px; color: #111827; line-height: 1.45; font-weight: 800; margin-bottom: 24px; text-align: left; letter-spacing: -0.3px;">...</h1>
+    <!-- 2. 文章大标题 (纯排版张力，无额外短线) -->
+    <h1 style="font-size: 24px; color: #1d1d1f; line-height: 1.38; font-weight: 700; margin: 0 0 28px 0; text-align: left; letter-spacing: -0.3px;">...</h1>
 
-    <!-- 3. 正文短段落 (单段不超过 3 行) -->
-    <p style="margin: 0 0 18px 0; font-size: 16px; line-height: 1.85; color: #2d3748;">...</p>
+    <!-- 3. 正文短段落 (单段不超过 3 行；行内 <code> 必带浅灰底色) -->
+    <p style="margin: 0 0 18px 0; font-size: 16px; line-height: 1.85; color: #1d1d1f;">...</p>
 
-    <!-- 4. 一句话说人话重点卡片 (微信白名单 section + 左侧粗蓝线) -->
-    <section style="margin: 24px 0; padding: 18px 20px; background-color: #f8fafc; border-left: 4px solid #2563eb; border-radius: 6px; box-sizing: border-box;">
-      <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #0f172a;">一句话说人话：它到底干了啥？</p>
-      <p style="margin: 0; font-size: 15px; line-height: 1.8; color: #334155;">...</p>
-    </section>
-
-    <!-- 5. 补充背景卡片 -->
-    <section style="margin: 18px 0; padding: 14px 16px; background-color: #f1f5f9; border-radius: 6px; font-size: 14px; color: #475569; line-height: 1.75; box-sizing: border-box;">
-      <p style="margin: 0;"><strong style="color: #0f172a;">【补充背景·...】</strong><br>...</p>
-    </section>
-
-    <!-- 6. 真实命令终端框 (若无真实命令则改为链接卡片) -->
-    <section style="margin: 18px 0; background-color: #1e293b; border-radius: 8px; padding: 16px 18px; overflow-x: auto; color: #f8fafc; font-family: Consolas, Monaco, monospace; font-size: 14px; line-height: 1.75; box-sizing: border-box;">
+    <!-- 4. 一句话说人话卡片 (#f5f5f7 无边框圆角卡片) -->
+    <section style="margin: 28px 0; padding: 20px 22px; background-color: #f5f5f7; border-radius: 12px; box-sizing: border-box;">
       ...
     </section>
 
-    <!-- 7. 真实链接兜底卡片 -->
-    <section style="margin: 18px 0; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; font-size: 14.5px; line-height: 1.8; box-sizing: border-box;">
-      ...
-    </section>
+    <!-- 5. 常规 H2 + 极简代码框 (#f5f5f7 浅灰单色，无三色圆点) -->
+    <h2 style="font-size: 19px; color: #1d1d1f; font-weight: 700; margin: 38px 0 16px 0; padding-bottom: 8px; border-bottom: 1px solid #e5e5ea; line-height: 1.35; letter-spacing: -0.2px;">...</h2>
 
-    <!-- 8. 结尾分隔与号召 -->
-    <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; text-align: center; color: #94a3b8; font-size: 13.5px;">
-      感谢阅读！如果觉得有用，顺手点个<strong>【在看】</strong>或转给身边折腾技术的朋友吧。
-    </div>
+    <!-- 6. 泼点冷水 (纯黑细线标题 + 简洁分段正文，无黄色背景框) -->
+    <h2 style="font-size: 19px; color: #1d1d1f; font-weight: 700; margin: 38px 0 16px 0; padding-bottom: 8px; border-bottom: 1px solid #e5e5ea; line-height: 1.35; letter-spacing: -0.2px;">泼点冷水</h2>
+    <p style="margin: 0 0 18px 0;"><strong style="color: #1d1d1f;">第一，...</strong>...</p>
+
+    <!-- 7. 结尾直接自然收束（不加“最后聊两句”H2）+ 细线致谢栏 -->
+    <p style="margin: 30px 0 28px 0;">...</p>
+    <section style="border-top: 1px solid #e5e5ea; padding-top: 20px; text-align: center; color: #86868b; font-size: 13.5px; box-sizing: border-box;">
+      感谢阅读！如果觉得有用，顺手点个<strong style="color: #424245;">【在看】</strong>或转给身边折腾技术的朋友吧。
+    </section>
 
   </div>
 </body>
@@ -157,6 +151,10 @@ license: MIT
 
 当用户输入一个网址链接时，按以下流水线执行：
 1. **真实抓取与研读:** 优先调用页面读取或网络检索工具，获取该网页的真实正文、README、API 文档或技术报告，全面掌握其真实功能、真实限制与真实运行方式。
-2. **证据核查:** 检查页面是否包含可验证的快速启动指令；若无，记录真实项目主页与演示地址，坚决不进行代码捏造。
-3. **内容重构:** 按照第 §2 节的 7 步框架，以第一人称真实博主口吻组织大白话文案。
-4. **编译导出 HTML:** 将生成的内容组装进第 §3 节的全内联 CSS 模板，直接在当前目录写入 `[项目名].html`，并在对话中告知用户该文件的绝对路径与核心亮点。
+2. **展示音视频自动探测与爬取（前提：原网站存在）:**
+   - 调用 [`scripts/extract_media.py`](./scripts/extract_media.py)（`python scripts/extract_media.py --url "<网址>" --out-dir ./media --json`）扫描目标网页是否包含 `<audio>`、`<video>`、`<source>` 或 `.wav`/`.mp3`/`.mp4`/`.webm` 等真实演示媒体。
+   - **若存在音视频：** 自动下载至 `./media/` 目录，脚本会为 `.wav` 音频自动生成极简声波预览图（`*_waveform.png`），或保存视频封面（`*_poster.png`）。
+   - **若不存在音视频：** 跳过媒体展示卡片，严禁凭空编造试听/演示素材。
+3. **证据核查:** 检查页面是否包含可验证的快速启动指令；若无，记录真实项目主页与演示地址，坚决不进行代码捏造。
+4. **内容重构:** 按照第 §2 节的 7 步框架，以第一人称真实博主口吻组织大白话文案。若第 2 步抓到了真实展示音视频，使用 `wechat-style-guide.md` 中的**音视频展示卡片（`<section>`）**将本地声波预览图/视频封面、原链接与本地文件名嵌入对应段落（**严禁在 HTML 中直接输出会被微信公众号后台强制清洗的 `<audio>` 或 `<video>` 原生标签**，而应采用“可直贴声波/封面 `<img>` + 媒体信息卡片 + 微信后台上传文件提示”确保复制粘贴格式零损耗）。
+5. **编译导出与图片内联:** 将生成的内容组装进第 §3 节的全内联 CSS 模板，直接在当前目录写入 `[项目名].html`；若正文引用了 `./media/*.png` 预览图，运行 `python scripts/extract_media.py --inject-html "[项目名].html"` 将图片转成 Base64 Data URI 内联进 HTML，确保浏览器 `Ctrl+A` 全选复制进微信公众号后台时图文完整保留，并在对话中告知用户文件绝对路径、核心亮点及下载到本地 `./media/` 的音视频清单。
